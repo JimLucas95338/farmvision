@@ -28,5 +28,5 @@ This project is part of a hackathon collaboration. Key components:
 
 ## Team
 
-- Unity AR Development: [Your Name]
+- Unity AR Development: Jim Lucas
 - Web Interface: Habib Ullah
