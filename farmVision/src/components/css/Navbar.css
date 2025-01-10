@@ -1,0 +1,88 @@
+/* Navbar Styles */
+.navbar {
+  background-color: #1a1a1a; /* Slightly lighter black for better aesthetics */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  width: 100%;
+  height: 50px;
+  top: 0;
+  z-index: 1000;
+  font-family: "Roboto", sans-serif; /* Modern sans-serif font */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for a professional touch */
+}
+
+.navbar-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.navbar-logo {
+  font-size: 1.8rem; /* Slightly larger for emphasis */
+  font-weight: bold;
+  margin-right: 2rem; /* Add space between heading and nav items */
+  letter-spacing: 1px; /* Professional letter spacing */
+  color: #f8f8f8; /* Soft white for better visibility */
+}
+
+.nav-menu {
+  margin-left: 111px;
+  display: flex;
+  gap: 2rem;
+  list-style: none;
+}
+
+.nav-item {
+  font-size: 1rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: #f8f8f8;
+  transition: color 0.3s ease;
+}
+
+.nav-link:hover {
+  color: #00b4d8; /* Professional teal-blue hover effect */
+}
+
+.hamburger-menu {
+  display: none;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.hamburger-menu .bar {
+  width: 25px;
+  height: 3px;
+  background-color: #fff;
+  margin: 3px 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .nav-menu {
+    display: none;
+    flex-direction: column;
+    background-color: #1a1a1a;
+    position: absolute;
+    top: 50px;
+    right: 0;
+    width: 100%;
+    padding: 1rem 0;
+  }
+
+  .nav-menu.active {
+    display: flex;
+  }
+
+  .hamburger-menu {
+    display: flex;
+    margin-left: 100px;
+  }
+}
