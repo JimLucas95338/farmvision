@@ -62,4 +62,4 @@ src/
 
 ## API Documentation
 
-[Include API endpoints and data formats here]
+Api Endpoints (https://67819d9dc51d092c3dccff30.mockapi.io/api/v1/sensors)
