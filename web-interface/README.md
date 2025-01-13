@@ -1,65 +1,36 @@
-# FarmVision Web Interface
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A web-based dashboard for monitoring and controlling AR-based farm sensors.
+## Getting Started
 
-## Features
+First, run the development server:
 
-- Real-time sensor data visualization
-- Interactive map showing sensor locations
-- Temperature and humidity monitoring
-- QR code generation for AR view transition
-- Responsive design for desktop and mobile web browsers
-
-## Tech Stack
-
-- React (Create React App)
-- WebSocket for real-time updates
-- Chart.js for data visualization
-- QR code generation for AR handoff
-
-## Setup Instructions
-
-1. Install dependencies:
 ```bash
-npm install
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-2. Start development server:
-```bash
-npm start
-```
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-3. Build for production:
-```bash
-npm run build
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Project Structure
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-```
-src/
-├── components/         # React components
-│   ├── Map/           # Map visualization
-│   ├── SensorList/    # Sensor monitoring
-│   └── QRCode/        # AR transition
-├── services/          # API and WebSocket services
-├── utils/             # Helper functions
-└── App.js            # Main application component
-```
+## Learn More
 
-## Integration Points
+To learn more about Next.js, take a look at the following resources:
 
-- Matches Unity sensor data format
-- Synchronized update intervals with AR application
-- Consistent coordinate system with GPS anchors
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-## Development Guidelines
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-1. Follow the existing sensor data structure
-2. Maintain consistent styling with AR interface
-3. Test on both desktop and mobile browsers
-4. Consider performance for real-time updates
+## Deploy on Vercel
 
-## API Documentation
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-[Include API endpoints and data formats here]
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

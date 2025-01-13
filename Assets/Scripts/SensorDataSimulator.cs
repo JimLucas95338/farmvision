@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections;
 using TMPro;
 
-public class SensorDataSimulator : MonoBehaviour  // Added MonoBehaviour inheritance here
+public class SensorDataSimulator : MonoBehaviour
 {
     [Header("Simulation Settings")]
     [SerializeField] private float updateInterval = 2f;
@@ -10,29 +10,37 @@ public class SensorDataSimulator : MonoBehaviour  // Added MonoBehaviour inherit
     [SerializeField] private float maxTemperature = 35f;
     [SerializeField] private float minHumidity = 30f;
     [SerializeField] private float maxHumidity = 80f;
+    [SerializeField] private float noiseAmount = 0.5f;
 
-    [Header("Display Format")]
-    [SerializeField] private string displayFormat = "Temp: {0:F1}°C\nHumidity: {1:F1}%";
+    [Header("Range Settings")]
+    [SerializeField] private float idealTempMin = 20f;
+    [SerializeField] private float idealTempMax = 25f;
+    [SerializeField] private float idealHumidityMin = 40f;
+    [SerializeField] private float idealHumidityMax = 60f;
+
+    private static readonly Color goodColor = Color.green;
+    private static readonly Color badColor = Color.red;
 
     private SensorLabel sensorLabel;
+    private MeshRenderer objectRenderer;
+    private Material objectMaterial;
     private float currentTemperature;
     private float currentHumidity;
-    private float noiseAmount = 0.5f;
 
     private void Start()
     {
         sensorLabel = GetComponent<SensorLabel>();
-        if (sensorLabel == null)
+        objectRenderer = GetComponent<MeshRenderer>();
+
+        if (Application.isPlaying && objectRenderer != null)
         {
-            Debug.LogError("SensorLabel component not found!");
-            return;
+            objectMaterial = new Material(objectRenderer.material);
+            objectRenderer.material = objectMaterial;
         }
 
-        // Initialize with random values
         currentTemperature = Random.Range(minTemperature, maxTemperature);
         currentHumidity = Random.Range(minHumidity, maxHumidity);
 
-        // Start the update coroutine
         StartCoroutine(SimulateSensorData());
     }
 
@@ -40,7 +48,7 @@ public class SensorDataSimulator : MonoBehaviour  // Added MonoBehaviour inherit
     {
         while (true)
         {
-            // Add some random variation to current values
+            // Update values
             currentTemperature = Mathf.Clamp(
                 currentTemperature + Random.Range(-noiseAmount, noiseAmount),
                 minTemperature,
@@ -53,31 +61,38 @@ public class SensorDataSimulator : MonoBehaviour  // Added MonoBehaviour inherit
                 maxHumidity
             );
 
-            // Update the label
-            string newText = string.Format(displayFormat, currentTemperature, currentHumidity);
-            sensorLabel.UpdateSensorData(newText, 0, 0); // GPS coordinates set to 0 for now
+            // Check if values are in ideal ranges
+            bool isInRange = IsInIdealRange(currentTemperature, currentHumidity);
+            Color currentColor = isInRange ? goodColor : badColor;
 
-            // Color-code based on temperature
-            if (currentTemperature > 30f)
+            // Update object color
+            if (objectMaterial != null)
             {
-                GetComponent<Renderer>().material.color = Color.red;
+                objectMaterial.color = currentColor;
             }
-            else if (currentTemperature < 20f)
+
+            // Update label
+            if (sensorLabel != null)
             {
-                GetComponent<Renderer>().material.color = Color.blue;
-            }
-            else
-            {
-                GetComponent<Renderer>().material.color = Color.green;
+                sensorLabel.UpdateSensorData("", 0, 0, currentTemperature, currentHumidity, currentColor);
             }
 
             yield return new WaitForSeconds(updateInterval);
         }
     }
 
-    // Public method to get current sensor readings
-    public (float temperature, float humidity) GetCurrentReadings()
+    private bool IsInIdealRange(float temp, float humidity)
     {
-        return (currentTemperature, currentHumidity);
+        bool tempInRange = temp >= idealTempMin && temp <= idealTempMax;
+        bool humidityInRange = humidity >= idealHumidityMin && humidity <= idealHumidityMax;
+        return tempInRange && humidityInRange;
+    }
+
+    private void OnDestroy()
+    {
+        if (Application.isPlaying && objectMaterial != null)
+        {
+            Destroy(objectMaterial);
+        }
     }
 }

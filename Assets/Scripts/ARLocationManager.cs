@@ -14,44 +14,130 @@ public class ARLocationManager : MonoBehaviour
     private ARSession arSession;
 
     [Header("Location Settings")]
+    [SerializeField] private float locationUpdateInterval = 1.0f;
+    [SerializeField] private float minAccuracyThreshold = 20f; // Meters
+    [SerializeField] private int locationSmoothingBufferSize = 5;
     private bool isTrackingLocation = false;
-    private float locationUpdateInterval = 1.0f;
     private LocationInfo lastLocation;
+    private Queue<LocationData> locationBuffer;
+
+    [Header("Compass Settings")]
+    [SerializeField] private bool useCompassForRotation = true;
+    [SerializeField] private float compassUpdateInterval = 0.1f;
+    private bool isCompassEnabled = false;
+    private float lastCompassAngle = 0f;
 
     [Header("Debug")]
     [SerializeField] private bool showDebugInfo = true;
+    [SerializeField] private bool showLocationAccuracy = true;
+    [SerializeField] private bool showCompassAccuracy = true;
     private string debugText = "";
+
+    // Class to hold location data for smoothing
+    private class LocationData
+    {
+        public float latitude;
+        public float longitude;
+        public float accuracy;
+        public float timestamp;
+
+        public LocationData(float lat, float lon, float acc, float time)
+        {
+            latitude = lat;
+            longitude = lon;
+            accuracy = acc;
+            timestamp = time;
+        }
+    }
+
+    private class SmoothedLocation
+    {
+        public float latitude;
+        public float longitude;
+        public float accuracy;
+
+        public SmoothedLocation(float lat, float lon, float acc)
+        {
+            latitude = lat;
+            longitude = lon;
+            accuracy = acc;
+        }
+    }
 
     private void Awake()
     {
-        // Get AR components
         xrOrigin = GetComponent<XROrigin>();
         arSession = FindFirstObjectByType<ARSession>();
+        locationBuffer = new Queue<LocationData>();
 
-        // Request permissions
-        StartCoroutine(RequestLocationPermission());
+        StartCoroutine(InitializeLocationServices());
     }
 
-    private IEnumerator RequestLocationPermission()
+    private IEnumerator InitializeLocationServices()
     {
+        // Request location permission
         if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
         {
             Permission.RequestUserPermission(Permission.FineLocation);
             yield return new WaitForSeconds(0.1f);
+
+            if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
+            {
+                Debug.LogError("Location permission denied!");
+                yield break;
+            }
         }
 
         // Start location services
-        Input.location.Start(1f, 0.1f);
-        yield return new WaitWhile(() => Input.location.status == LocationServiceStatus.Initializing);
-
-        if (Input.location.status == LocationServiceStatus.Running)
+        bool initializationSuccessful = false;
+        try
         {
-            isTrackingLocation = true;
-            StartCoroutine(UpdateSensorPositions());
+            Input.location.Start(1f, 0.1f);
+            initializationSuccessful = true;
         }
-        else
+        catch (Exception e)
         {
-            Debug.LogError("Failed to start location services!");
+            Debug.LogError($"Error initializing location services: {e.Message}");
+        }
+
+        if (initializationSuccessful)
+        {
+            yield return new WaitWhile(() => Input.location.status == LocationServiceStatus.Initializing);
+
+            switch (Input.location.status)
+            {
+                case LocationServiceStatus.Running:
+                    isTrackingLocation = true;
+                    StartCoroutine(UpdateSensorPositions());
+                    if (useCompassForRotation) StartCoroutine(UpdateCompass());
+                    break;
+                case LocationServiceStatus.Failed:
+                    Debug.LogError("Location services failed to initialize!");
+                    break;
+                case LocationServiceStatus.Stopped:
+                    Debug.LogError("Location services are disabled!");
+                    break;
+            }
+        }
+    }
+
+    private IEnumerator UpdateCompass()
+    {
+        if (!Input.compass.enabled)
+        {
+            Input.compass.enabled = true;
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        isCompassEnabled = true;
+        while (isCompassEnabled)
+        {
+            lastCompassAngle = Input.compass.trueHeading;
+            if (xrOrigin != null)
+            {
+                xrOrigin.Camera.transform.rotation = Quaternion.Euler(0, lastCompassAngle, 0);
+            }
+            yield return new WaitForSeconds(compassUpdateInterval);
         }
     }
 
@@ -59,47 +145,106 @@ public class ARLocationManager : MonoBehaviour
     {
         while (isTrackingLocation)
         {
-            lastLocation = Input.location.lastData;
-
-            // Update all sensors
-            GPSSensorAnchor[] sensors = FindObjectsByType<GPSSensorAnchor>(FindObjectsSortMode.None);
-            foreach (var sensor in sensors)
+            if (Input.location.status == LocationServiceStatus.Running)
             {
-                UpdateSensorPosition(sensor);
-            }
+                LocationInfo newLocation = Input.location.lastData;
 
-            if (showDebugInfo)
-            {
-                debugText = $"Current Location: {lastLocation.latitude:F6}, {lastLocation.longitude:F6}\n" +
-                           $"Accuracy: {lastLocation.horizontalAccuracy}m";
+                // Only update if accuracy is good enough
+                if (newLocation.horizontalAccuracy <= minAccuracyThreshold)
+                {
+                    // Add to smoothing buffer
+                    LocationData locationData = new LocationData(
+                        newLocation.latitude,
+                        newLocation.longitude,
+                        newLocation.horizontalAccuracy,
+                        Time.time
+                    );
+
+                    AddToLocationBuffer(locationData);
+                    SmoothedLocation smoothedLocation = GetSmoothedLocation();
+                    lastLocation = newLocation; // Keep original LocationInfo for reference
+
+                    // Update sensors using smoothed location
+                    UpdateAllSensors(smoothedLocation);
+
+                    // Update debug info
+                    UpdateDebugInfo(smoothedLocation);
+                }
+                else
+                {
+                    debugText = $"Poor GPS accuracy: {newLocation.horizontalAccuracy}m\nWaiting for better signal...";
+                }
             }
 
             yield return new WaitForSeconds(locationUpdateInterval);
         }
     }
 
-    private void UpdateSensorPosition(GPSSensorAnchor sensor)
+    private void AddToLocationBuffer(LocationData location)
     {
-        // Calculate distance and bearing to sensor
+        locationBuffer.Enqueue(location);
+        if (locationBuffer.Count > locationSmoothingBufferSize)
+        {
+            locationBuffer.Dequeue();
+        }
+    }
+
+    private SmoothedLocation GetSmoothedLocation()
+    {
+        if (locationBuffer.Count == 0)
+            return new SmoothedLocation(
+                lastLocation.latitude,
+                lastLocation.longitude,
+                lastLocation.horizontalAccuracy
+            );
+
+        float sumLat = 0, sumLon = 0, sumAcc = 0;
+        float weightSum = 0;
+
+        foreach (var loc in locationBuffer)
+        {
+            float weight = 1f / (loc.accuracy + 1f);
+            sumLat += loc.latitude * weight;
+            sumLon += loc.longitude * weight;
+            sumAcc += loc.accuracy;
+            weightSum += weight;
+        }
+
+        return new SmoothedLocation(
+            sumLat / weightSum,
+            sumLon / weightSum,
+            sumAcc / locationBuffer.Count
+        );
+    }
+
+    private void UpdateAllSensors(SmoothedLocation smoothedLocation)
+    {
+        GPSSensorAnchor[] sensors = FindObjectsByType<GPSSensorAnchor>(FindObjectsSortMode.None);
+        foreach (var sensor in sensors)
+        {
+            UpdateSensorPosition(sensor, smoothedLocation);
+        }
+    }
+
+    private void UpdateSensorPosition(GPSSensorAnchor sensor, SmoothedLocation smoothedLocation)
+    {
         float distance = CalculateDistance(
-            (float)lastLocation.latitude,
-            (float)lastLocation.longitude,
+            smoothedLocation.latitude,
+            smoothedLocation.longitude,
             sensor.GetCurrentLatitude(),
             sensor.GetCurrentLongitude()
         );
 
         float bearing = CalculateBearing(
-            (float)lastLocation.latitude,
-            (float)lastLocation.longitude,
+            smoothedLocation.latitude,
+            smoothedLocation.longitude,
             sensor.GetCurrentLatitude(),
             sensor.GetCurrentLongitude()
         );
 
-        // Convert to local position
         float x = distance * Mathf.Sin(bearing * Mathf.Deg2Rad);
         float z = distance * Mathf.Cos(bearing * Mathf.Deg2Rad);
 
-        // Update sensor position
         Vector3 newPosition = new Vector3(x, sensor.transform.position.y, z);
         sensor.transform.position = newPosition;
     }
@@ -128,6 +273,20 @@ public class ARLocationManager : MonoBehaviour
         return Mathf.Atan2(y, x) * Mathf.Rad2Deg;
     }
 
+    private void UpdateDebugInfo(SmoothedLocation smoothedLocation)
+    {
+        if (!showDebugInfo) return;
+
+        string accuracyInfo = showLocationAccuracy ?
+            $"\nAccuracy: {smoothedLocation.accuracy:F1}m" : "";
+        string compassInfo = showCompassAccuracy && isCompassEnabled ?
+            $"\nHeading: {lastCompassAngle:F1}°" : "";
+
+        debugText = $"Location: {smoothedLocation.latitude:F6}, {smoothedLocation.longitude:F6}" +
+                   accuracyInfo +
+                   compassInfo;
+    }
+
     private void OnGUI()
     {
         if (showDebugInfo)
@@ -138,9 +297,15 @@ public class ARLocationManager : MonoBehaviour
 
     private void OnDisable()
     {
+        StopAllCoroutines();
         if (Input.location.status == LocationServiceStatus.Running)
         {
             Input.location.Stop();
+        }
+        if (Input.compass.enabled)
+        {
+            Input.compass.enabled = false;
+            isCompassEnabled = false;
         }
     }
 }
